@@ -1,0 +1,127 @@
+/************* BLYNK CONFIG *************/
+#define BLYNK_TEMPLATE_ID "TMPL3yxw9a8Wh"
+#define BLYNK_TEMPLATE_NAME "your template name"
+#define BLYNK_AUTH_TOKEN "your auth token"
+
+#include <WiFi.h>
+#include <BlynkSimpleEsp32.h>
+#include <Wire.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+#include <DHT.h>
+
+/************* WIFI *************/
+char ssid[] = "Your wifi name";
+char pass[] = "Your wifi password";
+
+/************* PINS *************/
+#define DHT_PIN 14
+#define DHT_TYPE DHT11
+#define GAS_PIN 34
+#define BUZZER_PIN 25
+#define SDA_PIN 21
+#define SCL_PIN 22
+
+/************* THRESHOLDS *************/
+#define GAS_THRESHOLD 2000
+#define TEMP_THRESHOLD 35
+#define FALL_THRESHOLD 2.5
+#define BUZZER_DURATION 5000   // 5 seconds
+
+/************* OBJECTS *************/
+DHT dht(DHT_PIN, DHT_TYPE);
+Adafruit_MPU6050 mpu;
+BlynkTimer timer;
+
+/************* VARIABLES *************/
+bool buzzerActive = false;
+unsigned long buzzerStart = 0;
+
+/************* SENSOR FUNCTION *************/
+void readSensors() {
+
+  int gasValue = analogRead(GAS_PIN);
+  float temperature = dht.readTemperature();
+
+  sensors_event_t a, g, temp;
+  mpu.getEvent(&a, &g, &temp);
+
+  float accMagnitude = sqrt(
+    a.acceleration.x * a.acceleration.x +
+    a.acceleration.y * a.acceleration.y +
+    a.acceleration.z * a.acceleration.z
+  );
+
+  /* SERIAL MONITOR DEBUG */
+  Serial.print("Gas: "); Serial.println(gasValue);
+  Serial.print("Temp: "); Serial.println(temperature);
+  Serial.print("Acc: "); Serial.println(accMagnitude);
+  Serial.println("----------------------");
+
+  /* SEND VALUES TO BLYNK */
+  Blynk.virtualWrite(V0, temperature);
+  Blynk.virtualWrite(V1, gasValue);
+  Blynk.virtualWrite(V2, accMagnitude);
+
+  String alertMessage = "System Normal";
+
+  /* PRIORITY ALERT SYSTEM */
+  if (gasValue > GAS_THRESHOLD) {
+    activateBuzzer();
+    alertMessage = "⚠ GAS ALERT!";
+  }
+  else if (!isnan(temperature) && temperature > TEMP_THRESHOLD) {
+    activateBuzzer();
+    alertMessage = "⚠ HIGH TEMPERATURE!";
+  }
+  else if (accMagnitude > FALL_THRESHOLD * 9.8) {
+    activateBuzzer();
+    alertMessage = "⚠ FALL DETECTED!";
+  }
+
+  Blynk.virtualWrite(V3, alertMessage);
+
+  /* BUZZER AUTO RESET */
+  if (buzzerActive && millis() - buzzerStart > BUZZER_DURATION) {
+    digitalWrite(BUZZER_PIN, LOW);
+    buzzerActive = false;
+  }
+}
+
+/************* BUZZER FUNCTION *************/
+void activateBuzzer() {
+  if (!buzzerActive) {
+    digitalWrite(BUZZER_PIN, HIGH);
+    buzzerActive = true;
+    buzzerStart = millis();
+  }
+}
+
+/************* SETUP *************/
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
+
+  Wire.begin(SDA_PIN, SCL_PIN);
+  dht.begin();
+
+  if (mpu.begin()) {
+    Serial.println("MPU6050 Connected Successfully");
+  } else {
+    Serial.println("MPU6050 Initialization Failed");
+  }
+
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+
+  timer.setInterval(1000L, readSensors);  // Read every 1 sec
+
+  Serial.println("System Started with Blynk");
+}
+
+/************* LOOP *************/
+void loop() {
+  Blynk.run();
+  timer.run();
+}
