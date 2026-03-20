@@ -2,7 +2,7 @@
 
 | Component | ESP32 Pin |
 |----------|-----------|
-| Gas Sensor | GPIO34 |
-| Motion Sensor | GPIO27 |
-| Temperature Sensor | GPIO4 |
-| Buzzer | GPIO15 |
+| Gas Sensor | Any GPIO |
+| Motion Sensor | Any GPIO |
+| Temperature Sensor | Any GPIO |
+| Buzzer | Any GPIO |
